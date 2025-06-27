@@ -116,7 +116,7 @@ install_dependencies() {
             echo "  • python3-pillow (image processing)" 
             echo "  • python3-magic (file type detection)"
             echo
-            read -p "Continue anyway? (y/N): " -n 1 -r
+            read -p "Continue anyway? (y/N): " -n 1 -r < /dev/tty
             echo
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 exit 1
@@ -213,7 +213,7 @@ echo "  • Download and install AppImage Installer"
 echo "  • Register .AppImage file associations"
 echo "  • Enable double-click installation of AppImage files"
 echo
-read -p "Continue? (Y/n): " -n 1 -r
+read -p "Continue? (Y/n): " -n 1 -r < /dev/tty
 echo
 
 if [[ $REPLY =~ ^[Nn]$ ]]; then
