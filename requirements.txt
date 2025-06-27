@@ -1,0 +1,4 @@
+PyGObject>=3.42.0
+Pillow>=9.0.0
+python-magic>=0.4.24
+packaging>=21.0 
