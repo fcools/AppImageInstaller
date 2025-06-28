@@ -37,6 +37,10 @@
 - [x] **GUI Manager dialog lockup fix** - Fixed Tkinter root window conflicts causing app freezes (2024-01-XX)
 - [x] **Uninstall dialog timing fix** - Fixed success dialogs staying visible after GUI refresh (2024-01-XX)
 - [x] **Complete custom dialog system** - Replaced all problematic messageboxes with reliable custom dialogs (2024-01-XX)
+- [x] **Native GTK dialog integration** - Reverted to native GTK dialogs for better system integration and user experience (2024-01-XX)
+- [x] **Hybrid dialog system fix** - Use GTK for questions (native appearance) but custom Tkinter for info (no conflicts) (2024-01-XX)
+- [x] **Final dialog fix** - Use custom Tkinter dialogs for success messages to eliminate GTK/Tkinter mixing (2024-01-XX)
+- [x] **GTK event loop fix** - Process pending GTK events before Tkinter refresh to eliminate conflicts (2024-01-XX)
 - **Error recovery** - Add more robust error recovery for partially installed AppImages
 - **Configuration file** - Add user configuration for AppImage storage location and preferences
 - **Desktop shortcut preferences** - Allow users to choose whether to create desktop shortcuts
@@ -69,4 +73,7 @@
 - **Comprehensive icon handling** - Real AppImage extraction, web search, fallbacks, GUI integration (2024-01-XX)
 - **Critical GUI Manager bug fix** - Fixed dialog lockup issue that required force-quit (2024-01-XX)
 - **Complete dialog system stability** - Fixed all remaining GUI dialog timing and lockup issues (2024-01-XX)
-- **Production-ready GUI Manager** - Professional dialog system with proper event handling and UX (2024-01-XX) 
+- **Production-ready GUI Manager** - Professional dialog system with proper event handling and UX (2024-01-XX)
+- **Native GTK dialog system** - Replaced custom dialogs with native GTK dialogs for professional Linux desktop integration (2024-01-XX)
+- **Hybrid dialog system** - GTK for questions (native), custom Tkinter for info (no event loop conflicts) - Final dialog fix (2024-01-XX)
+- **Pure GTK dialog system** - All GTK dialogs with proper event loop handling to eliminate conflicts completely (2024-01-XX) 
