@@ -108,42 +108,39 @@ class AppImageManager:
         try:
             path = Path(file_path)
             
-            # Check if file exists and is executable
-            if not path.exists() or not os.access(path, os.X_OK):
+            # Check if file exists
+            if not path.exists():
                 return False
             
             # Check filename pattern first (most reliable)
-            filename = path.name.lower()
-            if filename.endswith('.appimage') or filename.endswith('.AppImage'):
-                return True
-            
-            # Check file magic for executables
-            mime_type = magic.from_file(str(path), mime=True)
-            if not mime_type.startswith('application/'):
-                return False
-            
-            # Check if it contains AppImage signature anywhere in file
-            # AppImage signatures can be anywhere, not just in first 1KB
-            try:
-                with open(path, 'rb') as f:
-                    # Read in chunks to handle large files efficiently
-                    chunk_size = 8192
-                    while True:
-                        chunk = f.read(chunk_size)
-                        if not chunk:
-                            break
-                        if b'AppImage' in chunk or b'appimage' in chunk:
+            filename = path.name
+            if filename.endswith('.AppImage') or filename.endswith('.appimage'):
+                # For files with correct extension, do a quick content check
+                try:
+                    with open(path, 'rb') as f:
+                        # Read first 100KB to look for AppImage signature
+                        header = f.read(100 * 1024)
+                        if b'AppImage' in header or b'appimage' in header:
                             return True
-                        # Only check first 100KB to avoid reading entire large files
-                        if f.tell() > 100 * 1024:
-                            break
-                            
-                # If no AppImage signature found, still accept files ending with .AppImage
-                return filename.endswith('.appimage')
-                
+                        # Even without signature, trust the filename
+                        return True
+                except Exception:
+                    # If can't read file, still trust the filename
+                    return True
+            
+            # For files without .AppImage extension, check MIME type and content
+            try:
+                mime_type = magic.from_file(str(path), mime=True)
+                # Accept various executable types that might be AppImages
+                if mime_type in ['application/x-executable', 'application/x-sharedlib', 'application/octet-stream']:
+                    # Check for AppImage signature in content
+                    with open(path, 'rb') as f:
+                        header = f.read(100 * 1024)
+                        return b'AppImage' in header or b'appimage' in header
             except Exception:
-                # If reading fails, fall back to filename check
-                return filename.endswith('.appimage')
+                pass
+                
+            return False
                 
         except Exception:
             return False
