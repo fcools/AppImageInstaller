@@ -41,6 +41,7 @@
 - [x] **Hybrid dialog system fix** - Use GTK for questions (native appearance) but custom Tkinter for info (no conflicts) (2024-01-XX)
 - [x] **Final dialog fix** - Use custom Tkinter dialogs for success messages to eliminate GTK/Tkinter mixing (2024-01-XX)
 - [x] **GTK event loop fix** - Process pending GTK events before Tkinter refresh to eliminate conflicts (2024-01-XX)
+- [x] **Version update detection** - Detect and handle updates when installing newer versions of existing AppImages (2024-01-XX)
 - **Error recovery** - Add more robust error recovery for partially installed AppImages
 - **Configuration file** - Add user configuration for AppImage storage location and preferences
 - **Desktop shortcut preferences** - Allow users to choose whether to create desktop shortcuts

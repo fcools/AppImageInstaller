@@ -5,6 +5,7 @@ A simple and intuitive tool for managing AppImage files on Linux. Makes AppImage
 ## 🎯 Features
 
 - **One-Click Installation**: Double-click any AppImage file to install it
+- **Smart Version Updates**: Automatically detects and offers to update existing applications
 - **Desktop Integration**: Automatic creation of launcher shortcuts and menu entries
 - **Native Look**: Uses system-native dialog boxes (GTK/Tkinter)
 - **Cross-Distro**: Works on all major Linux distributions
@@ -127,6 +128,36 @@ When you double-click an AppImage:
 
 - **If not installed**: Shows installation dialog → Creates desktop entry → Launches app
 - **If already installed**: Shows uninstall/launch dialog → Acts accordingly
+- **If newer version detected**: Shows update dialog with version comparison → Replaces old version seamlessly
+
+### 🔄 Version Update Detection
+
+AppImage Installer automatically detects when you're installing a newer version of an already installed application:
+
+**Example scenario:**
+1. You have `GIMP-3.0.4-x86_64.AppImage` installed
+2. You download and double-click `GIMP-3.0.5-x86_64.AppImage`
+3. The system recognizes this as the same application (GIMP)
+4. Shows update dialog: "Update Available: GIMP 3.0.4 → 3.0.5"
+5. If you choose "Yes", it replaces the old version while preserving your shortcuts
+
+**Smart Detection:**
+- **Application Matching**: Recognizes apps with slightly different names (`GIMP` vs `GIMP Image Editor`)
+- **Version Parsing**: Understands semantic versioning (1.2.3, v2.0.1, etc.)
+- **Architecture Handling**: Ignores architecture suffixes (x86_64, amd64, etc.)
+- **Update Types**: Detects updates, downgrades, and reinstalls
+
+**What gets preserved during updates:**
+- ✅ Desktop shortcuts and menu entries
+- ✅ Application icons (if new version doesn't have a better one)
+- ✅ File associations
+- ✅ Registry information
+
+**What gets replaced:**
+- 🔄 Application executable file
+- 🔄 Version information
+- 🔄 Desktop file metadata
+- 🔄 Icon (if new version has a better one)
 
 ## 🛠️ Requirements
 

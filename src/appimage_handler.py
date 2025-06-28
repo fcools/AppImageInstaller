@@ -127,28 +127,197 @@ class AppImageHandler:
             
             app_name = info.name
             
-            # Ask user if they want to install
-            response = dialogs.show_question(
-                "Install AppImage?",
-                f"Would you like to install '{app_name}' to your system?\n\n"
-                f"This will:\n"
-                f"• Create a launcher shortcut\n"
-                f"• Add it to your applications menu\n"
-                f"• Launch the application\n\n"
-                f"Click 'Yes' to install and launch, or 'No' to cancel."
+            # Check if there's already an installed version of the same application
+            existing_version = self.manager.find_installed_version(info)
+            
+            if existing_version:
+                # Found an existing version - offer update
+                return self._handle_version_update(info, existing_version)
+            else:
+                # No existing version - fresh install
+                return self._handle_fresh_install(info)
+                
+        except Exception as e:
+            dialogs.show_error(
+                "Error",
+                f"Error handling unregistered AppImage: {str(e)}"
             )
+            return False
+    
+    def _handle_version_update(self, new_info: AppImageInfo, existing_info: AppImageInfo) -> bool:
+        """
+        Handle installation of a new version when an existing version is already installed.
+        
+        Args:
+            new_info (AppImageInfo): Information about the new AppImage.
+            existing_info (AppImageInfo): Information about the existing installed version.
+            
+        Returns:
+            bool: True if handling was successful, False otherwise.
+        """
+        try:
+            app_name = new_info.name
+            new_version = new_info.version
+            existing_version = existing_info.version
+            
+            # Compare versions
+            is_newer = self.manager.is_newer_version(new_version, existing_version)
+            
+            if is_newer:
+                # New version is newer
+                response = dialogs.show_question(
+                    "Update Available",
+                    f"A newer version of '{app_name}' is available!\n\n"
+                    f"Installed version: {existing_version}\n"
+                    f"New version: {new_version}\n\n"
+                    f"Would you like to update to the new version?\n\n"
+                    f"This will:\n"
+                    f"• Replace the current version\n"
+                    f"• Keep your launcher shortcuts\n"
+                    f"• Launch the updated application\n\n"
+                    f"Click 'Yes' to update or 'No' to cancel."
+                )
+            elif self.manager.compare_versions(new_version, existing_version) == 0:
+                # Same version
+                response = dialogs.show_question(
+                    "Same Version Detected",
+                    f"'{app_name}' version {existing_version} is already installed.\n\n"
+                    f"Would you like to reinstall it?\n\n"
+                    f"This will:\n"
+                    f"• Replace the current installation\n"
+                    f"• Keep your launcher shortcuts\n"
+                    f"• Launch the application\n\n"
+                    f"Click 'Yes' to reinstall or 'No' to cancel."
+                )
+            else:
+                # New version is older
+                response = dialogs.show_question(
+                    "Older Version Detected",
+                    f"You are trying to install an older version of '{app_name}'.\n\n"
+                    f"Installed version: {existing_version}\n"
+                    f"This version: {new_version}\n\n"
+                    f"Would you like to downgrade to this version?\n\n"
+                    f"This will:\n"
+                    f"• Replace the newer version\n"
+                    f"• Keep your launcher shortcuts\n"
+                    f"• Launch the application\n\n"
+                    f"Click 'Yes' to downgrade or 'No' to cancel."
+                )
             
             if response == DialogResult.YES:
-                # Install and launch the AppImage
-                return self._install_appimage(info)
+                # User wants to update/reinstall/downgrade
+                return self._perform_update(new_info, existing_info)
             else:
                 # User cancelled
                 return True
                 
         except Exception as e:
             dialogs.show_error(
-                "Error",
-                f"Error handling unregistered AppImage: {str(e)}"
+                "Update Error",
+                f"Error handling version update: {str(e)}"
+            )
+            return False
+    
+    def _handle_fresh_install(self, info: AppImageInfo) -> bool:
+        """
+        Handle fresh installation of an AppImage (no existing version).
+        
+        Args:
+            info (AppImageInfo): AppImage information.
+            
+        Returns:
+            bool: True if handling was successful, False otherwise.
+        """
+        app_name = info.name
+        
+        # Ask user if they want to install
+        response = dialogs.show_question(
+            "Install AppImage?",
+            f"Would you like to install '{app_name}' to your system?\n\n"
+            f"This will:\n"
+            f"• Create a launcher shortcut\n"
+            f"• Add it to your applications menu\n"
+            f"• Launch the application\n\n"
+            f"Click 'Yes' to install and launch, or 'No' to cancel."
+        )
+        
+        if response == DialogResult.YES:
+            # Install and launch the AppImage
+            return self._install_appimage(info)
+        else:
+            # User cancelled
+            return True
+    
+    def _perform_update(self, new_info: AppImageInfo, existing_info: AppImageInfo) -> bool:
+        """
+        Perform the actual update by removing the old version and installing the new one.
+        
+        Args:
+            new_info (AppImageInfo): Information about the new AppImage.
+            existing_info (AppImageInfo): Information about the existing version.
+            
+        Returns:
+            bool: True if update was successful, False otherwise.
+        """
+        try:
+            # Preserve the desktop file path and icon path from existing installation
+            preserved_desktop_path = existing_info.desktop_file_path
+            preserved_icon_path = existing_info.icon_path
+            
+            # Remove the old version (but keep desktop integration for seamless update)
+            old_exec_path = Path(existing_info.exec_command) if existing_info.exec_command else None
+            if old_exec_path and old_exec_path.exists() and old_exec_path.parent == self.manager.appimage_storage:
+                old_exec_path.unlink()
+            
+            # Unregister the old version from registry
+            self.manager.unregister_appimage(existing_info.appimage_path)
+            
+            # Use preserved icon if the new version doesn't have a good one
+            if preserved_icon_path and (not new_info.icon_path or new_info.icon_path == 'application-x-executable'):
+                new_info.icon_path = preserved_icon_path
+            
+            # Install the new version
+            if not self.manager.install_appimage(new_info):
+                dialogs.show_error(
+                    "Update Failed",
+                    "Could not install the new version to system."
+                )
+                return False
+            
+            # Update desktop file with new information
+            if preserved_desktop_path:
+                self.desktop.remove_desktop_file(preserved_desktop_path)
+            
+            desktop_path = self.desktop.create_desktop_file(new_info)
+            if not desktop_path:
+                dialogs.show_error(
+                    "Update Failed",
+                    "Could not update launcher shortcut."
+                )
+                return False
+            
+            # Update info with desktop file path
+            new_info.desktop_file_path = desktop_path
+            
+            # Create desktop shortcut (optional)
+            self.desktop.create_desktop_shortcut(new_info)
+            
+            # Show success message
+            action = "updated" if self.manager.is_newer_version(new_info.version, existing_info.version) else "reinstalled"
+            dialogs.show_info(
+                "Update Successful",
+                f"'{new_info.name}' has been successfully {action}!\n\n"
+                f"New version: {new_info.version}\n"
+                f"You can find it in your applications menu."
+            )
+            
+            # Launch the updated application
+            return self._launch_appimage(new_info.exec_command, new_info.name)
+            
+        except Exception as e:
+            dialogs.show_error(
+                "Update Error",
+                f"Error during update: {str(e)}"
             )
             return False
     

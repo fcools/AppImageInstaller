@@ -10,6 +10,7 @@ import json
 import shutil
 import tempfile
 import subprocess
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
@@ -896,4 +897,146 @@ class AppImageManager:
             return True
         except Exception as e:
             print(f"Error saving registry: {e}")
-            return False 
+            return False
+
+    def find_installed_version(self, new_info: AppImageInfo) -> Optional[AppImageInfo]:
+        """
+        Find if there's already an installed version of the same application.
+        
+        Args:
+            new_info (AppImageInfo): Information about the new AppImage to check.
+            
+        Returns:
+            Optional[AppImageInfo]: Information about installed version, or None if not found.
+        """
+        registry = self._load_registry()
+        
+        # Normalize the new app name for comparison
+        new_name_normalized = self._normalize_app_name(new_info.name)
+        
+        for path, data in registry.items():
+            try:
+                installed_info = AppImageInfo(**data)
+                installed_name_normalized = self._normalize_app_name(installed_info.name)
+                
+                # Check if it's the same application by name similarity
+                if self._are_same_application(new_name_normalized, installed_name_normalized):
+                    return installed_info
+                    
+            except Exception:
+                continue
+                
+        return None
+
+    def _normalize_app_name(self, name: str) -> str:
+        """
+        Normalize an application name for comparison.
+        
+        Args:
+            name (str): Original application name.
+            
+        Returns:
+            str: Normalized name for comparison.
+        """
+        # Convert to lowercase and remove common suffixes/prefixes
+        normalized = name.lower().strip()
+        
+        # Remove version numbers, architecture info, and common suffixes
+        normalized = re.sub(r'[-_\s]*v?\d+\.\d+(\.\d+)?[-_\s]*', '', normalized)
+        normalized = re.sub(r'[-_\s]*(x86_64|amd64|i386|arm64|aarch64)[-_\s]*', '', normalized)
+        normalized = re.sub(r'[-_\s]*(appimage|portable|linux)[-_\s]*', '', normalized)
+        
+        # Remove extra spaces and normalize separators
+        normalized = re.sub(r'[-_\s]+', ' ', normalized).strip()
+        
+        return normalized
+
+    def _are_same_application(self, name1: str, name2: str) -> bool:
+        """
+        Check if two normalized names represent the same application.
+        
+        Args:
+            name1 (str): First normalized name.
+            name2 (str): Second normalized name.
+            
+        Returns:
+            bool: True if they represent the same application.
+        """
+        if not name1 or not name2:
+            return False
+            
+        # Exact match
+        if name1 == name2:
+            return True
+            
+        # Check if one is a substring of the other (for different naming conventions)
+        return name1 in name2 or name2 in name1
+
+    def compare_versions(self, version1: str, version2: str) -> int:
+        """
+        Compare two version strings.
+        
+        Args:
+            version1 (str): First version string.
+            version2 (str): Second version string.
+            
+        Returns:
+            int: -1 if version1 < version2, 0 if equal, 1 if version1 > version2.
+        """
+        if not version1 or version1 == 'Unknown':
+            return -1 if version2 and version2 != 'Unknown' else 0
+        if not version2 or version2 == 'Unknown':
+            return 1
+            
+        # Try semantic version comparison
+        try:
+            v1_parts = self._parse_version(version1)
+            v2_parts = self._parse_version(version2)
+            
+            # Compare each part
+            for i in range(max(len(v1_parts), len(v2_parts))):
+                v1_val = v1_parts[i] if i < len(v1_parts) else 0
+                v2_val = v2_parts[i] if i < len(v2_parts) else 0
+                
+                if v1_val < v2_val:
+                    return -1
+                elif v1_val > v2_val:
+                    return 1
+                    
+            return 0
+            
+        except Exception:
+            # Fallback to string comparison
+            if version1 < version2:
+                return -1
+            elif version1 > version2:
+                return 1
+            else:
+                return 0
+
+    def _parse_version(self, version: str) -> List[int]:
+        """
+        Parse a version string into numeric components.
+        
+        Args:
+            version (str): Version string to parse.
+            
+        Returns:
+            List[int]: List of numeric version components.
+        """
+        # Extract numeric parts from version string
+        parts = re.findall(r'\d+', version)
+        return [int(part) for part in parts]
+
+    def is_newer_version(self, new_version: str, installed_version: str) -> bool:
+        """
+        Check if the new version is newer than the installed version.
+        
+        Args:
+            new_version (str): Version of the new AppImage.
+            installed_version (str): Version of the installed AppImage.
+            
+        Returns:
+            bool: True if new version is newer.
+        """
+        return self.compare_versions(new_version, installed_version) > 0 
