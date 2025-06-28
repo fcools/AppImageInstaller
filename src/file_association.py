@@ -66,8 +66,14 @@ class FileAssociation:
             # Set as default application for AppImage MIME type
             self._set_default_application()
             
+            # Also set as default for executable types that might conflict
+            self._set_additional_defaults()
+            
             # Force system-wide desktop database update
             self._update_system_desktop_database()
+            
+            # Try to register system-wide MIME type as well
+            self._register_system_mime_type()
             
             return True
             
@@ -129,15 +135,14 @@ class FileAssociation:
         <comment>AppImage application bundle</comment>
         <comment xml:lang="en">AppImage application bundle</comment>
         <icon name="application-x-executable"/>
-        <glob pattern="*.AppImage" weight="90"/>
-        <glob pattern="*.appimage" weight="90"/>
-        <magic priority="80">
+        <glob pattern="*.AppImage" weight="95"/>
+        <glob pattern="*.appimage" weight="95"/>
+        <magic priority="90">
             <match type="string" offset="0:102400" value="AppImage"/>
         </magic>
-        <magic priority="75">
+        <magic priority="85">
             <match type="string" offset="0:102400" value="appimage"/>
         </magic>
-        <sub-class-of type="application/x-executable"/>
     </mime-type>
 </mime-info>'''
             
@@ -173,8 +178,9 @@ Exec={script_path} %f
 Icon=application-x-executable
 StartupNotify=false
 NoDisplay=false
-MimeType=application/x-appimage;application/x-executable;application/x-sharedlib;
+MimeType=application/x-appimage;application/x-executable;application/x-sharedlib;application/octet-stream;
 Categories=System;Utility;
+X-AppStream-Ignore=true
 """
             
             app_file = self.applications_dir / "appimage-installer.desktop"
@@ -269,6 +275,82 @@ Categories=System;Utility;
             
         except Exception:
             return True  # Don't fail if we can't do system update
+    
+    def _set_additional_defaults(self) -> bool:
+        """
+        Set our application as default for additional MIME types that might conflict.
+        
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+        additional_types = [
+            'application/x-executable',
+            'application/x-sharedlib',
+            'application/octet-stream'
+        ]
+        
+        for mime_type in additional_types:
+            try:
+                subprocess.run([
+                    'xdg-mime', 'default', 'appimage-installer.desktop', mime_type
+                ], capture_output=True, timeout=30)
+            except Exception:
+                pass  # Don't fail if one doesn't work
+                
+        return True
+    
+    def _register_system_mime_type(self) -> bool:
+        """
+        Try to register MIME type system-wide for better priority.
+        
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+        try:
+            # Create temporary MIME file
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
+                f.write('''<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+    <mime-type type="application/x-appimage">
+        <comment>AppImage application bundle</comment>
+        <comment xml:lang="en">AppImage application bundle</comment>
+        <icon name="application-x-executable"/>
+        <glob pattern="*.AppImage" weight="95"/>
+        <glob pattern="*.appimage" weight="95"/>
+        <magic priority="90">
+            <match type="string" offset="0:102400" value="AppImage"/>
+        </magic>
+        <magic priority="85">
+            <match type="string" offset="0:102400" value="appimage"/>
+        </magic>
+        <sub-class-of type="application/x-executable"/>
+    </mime-type>
+</mime-info>''')
+                temp_file = f.name
+            
+            # Try to install system-wide
+            result = subprocess.run([
+                'sudo', 'cp', temp_file, '/usr/share/mime/packages/appimage-installer.xml'
+            ], capture_output=True, timeout=30)
+            
+            if result.returncode == 0:
+                # Update system MIME database
+                subprocess.run([
+                    'sudo', 'update-mime-database', '/usr/share/mime'
+                ], capture_output=True, timeout=30)
+            
+            # Clean up temp file
+            import os
+            try:
+                os.unlink(temp_file)
+            except:
+                pass
+                
+            return True
+            
+        except Exception:
+            return True  # Don't fail if system registration doesn't work
     
     def _update_desktop_database(self) -> bool:
         """
