@@ -42,7 +42,7 @@ data_files = collect_icon_files()
 
 setup(
     name="appimage-installer",
-    version="1.0.0",
+    version="1.1.0",
     author="AppImage Installer Project",
     author_email="",
     description="A simple tool for managing AppImage files on Linux",

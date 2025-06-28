@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 
 # Project information
 PROJECT_NAME="appimage-installer"
-VERSION="1.0.0"
+VERSION="1.1.0"
 DESCRIPTION="Simple tool for managing AppImage files on Linux"
 MAINTAINER="AppImage Installer Project <contact@example.com>"
 HOMEPAGE="https://github.com/fcools/AppImageInstaller"
