@@ -181,9 +181,14 @@ class NativeDialogs:
             import tkinter as tk
             from tkinter import messagebox
             
+            # For GUI Manager, use custom modal dialog to avoid messagebox issues
+            if parent is not None and dialog_type == DialogType.INFO:
+                return self._show_custom_info_dialog(title, message, parent)
+            
             # Use existing parent window if available, otherwise create temporary root
             if parent is not None:
-                # Use the existing parent window - no need to create/destroy anything
+                # Ensure parent window is updated and responsive
+                parent.update_idletasks()
                 root = parent
                 should_destroy = False
             else:
@@ -213,6 +218,87 @@ class NativeDialogs:
             print(f"Dialog Error: {title}")
             print(f"Message: {message}")
             print(f"Error: {e}")
+            return DialogResult.OK
+    
+    def _show_custom_info_dialog(self, title: str, message: str, parent) -> DialogResult:
+        """
+        Show a custom info dialog that doesn't have messagebox issues.
+        
+        Args:
+            title (str): Dialog title.
+            message (str): Dialog message.
+            parent: Parent window.
+            
+        Returns:
+            DialogResult: Always OK for info dialogs.
+        """
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            
+            # Create modal dialog window
+            dialog = tk.Toplevel(parent)
+            dialog.title("AppImage Installer")
+            dialog.resizable(False, False)
+            dialog.grab_set()  # Make modal
+            dialog.transient(parent)  # Keep on top of parent
+            
+            # Center the dialog on parent
+            dialog.geometry("400x150")
+            parent.update_idletasks()
+            x = parent.winfo_x() + (parent.winfo_width() // 2) - 200
+            y = parent.winfo_y() + (parent.winfo_height() // 2) - 75
+            dialog.geometry(f"+{x}+{y}")
+            
+            # Create content frame
+            main_frame = ttk.Frame(dialog, padding="20")
+            main_frame.pack(fill=tk.BOTH, expand=True)
+            
+            # Title label
+            title_label = ttk.Label(main_frame, text=title, font=('TkDefaultFont', 12, 'bold'))
+            title_label.pack(anchor=tk.W, pady=(0, 10))
+            
+            # Message label
+            msg_label = ttk.Label(main_frame, text=message, wraplength=350, justify=tk.LEFT)
+            msg_label.pack(anchor=tk.W, pady=(0, 20))
+            
+            # Button frame
+            button_frame = ttk.Frame(main_frame)
+            button_frame.pack(anchor=tk.E)
+            
+            # Result variable
+            result = [DialogResult.OK]
+            
+            def on_ok():
+                result[0] = DialogResult.OK
+                dialog.destroy()
+            
+            def on_close():
+                result[0] = DialogResult.OK
+                dialog.destroy()
+            
+            # OK button
+            ok_btn = ttk.Button(button_frame, text="OK", command=on_ok)
+            ok_btn.pack()
+            ok_btn.focus()
+            
+            # Handle window close
+            dialog.protocol("WM_DELETE_WINDOW", on_close)
+            
+            # Bind Enter key to OK
+            dialog.bind('<Return>', lambda e: on_ok())
+            dialog.bind('<Escape>', lambda e: on_close())
+            
+            # Wait for dialog to close
+            dialog.wait_window()
+            
+            return result[0]
+            
+        except Exception as e:
+            print(f"Custom dialog error: {e}")
+            # Fallback to console
+            print(f"INFO: {title}")
+            print(f"Message: {message}")
             return DialogResult.OK
 
 

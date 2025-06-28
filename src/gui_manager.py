@@ -250,15 +250,7 @@ class AppImageManagerGUI:
     
     def _uninstall_app(self, app: AppImageInfo) -> None:
         """Uninstall the selected application."""
-        response = self.dialogs.show_question(
-            "Confirm Uninstall",
-            f"Are you sure you want to uninstall '{app.name}'?\n\n"
-            f"This will remove:\n"
-            f"• Application shortcuts\n"
-            f"• Menu entries\n"
-            f"• Installed application files\n\n"
-            f"Click 'Yes' to uninstall or 'No' to cancel."
-        )
+        response = self._show_uninstall_confirmation(app.name)
         
         if response == DialogResult.YES:
             try:
@@ -271,13 +263,9 @@ class AppImageManagerGUI:
                 
                 # Uninstall AppImage
                 if self.manager.uninstall_appimage(app.appimage_path):
-                    self.dialogs.show_info(
-                        "Uninstall Successful",
-                        f"'{app.name}' has been successfully uninstalled."
-                    )
-                    
-                    # Schedule refresh after dialog closes to prevent GUI conflicts
-                    self.tk_root.after(100, self._refresh_tk_list)
+                    # Schedule both the success message and refresh to avoid dialog conflicts
+                    self.tk_root.after(50, lambda: self._show_uninstall_success(app.name))
+                    self.tk_root.after(200, self._refresh_tk_list)
                 else:
                     self.dialogs.show_error(
                         "Uninstall Failed",
@@ -289,6 +277,185 @@ class AppImageManagerGUI:
                     "Uninstall Error",
                     f"Error during uninstallation: {str(e)}"
                 )
+    
+    def _show_uninstall_success(self, app_name: str) -> None:
+        """Show uninstall success message in a separate event cycle."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            
+            # Create a simple, lightweight success dialog
+            dialog = tk.Toplevel(self.tk_root)
+            dialog.title("AppImage Installer")
+            dialog.geometry("350x120")
+            dialog.resizable(False, False)
+            dialog.grab_set()
+            dialog.transient(self.tk_root)
+            
+            # Center on parent
+            self.tk_root.update_idletasks()
+            x = self.tk_root.winfo_x() + (self.tk_root.winfo_width() // 2) - 175
+            y = self.tk_root.winfo_y() + (self.tk_root.winfo_height() // 2) - 60
+            dialog.geometry(f"+{x}+{y}")
+            
+            # Content
+            frame = ttk.Frame(dialog, padding="20")
+            frame.pack(fill=tk.BOTH, expand=True)
+            
+            ttk.Label(frame, text="Uninstall Successful", 
+                     font=('TkDefaultFont', 12, 'bold')).pack(pady=(0, 10))
+            ttk.Label(frame, text=f"'{app_name}' has been successfully uninstalled.").pack(pady=(0, 15))
+            
+            def close_dialog():
+                dialog.grab_release()
+                dialog.destroy()
+            
+            ok_btn = ttk.Button(frame, text="OK", command=close_dialog, width=15)
+            ok_btn.pack(pady=5)
+            ok_btn.focus()
+            
+            # Bindings
+            dialog.bind('<Return>', lambda e: close_dialog())
+            dialog.bind('<Escape>', lambda e: close_dialog())
+            dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+            
+            # Auto-close after 3 seconds as backup
+            dialog.after(3000, close_dialog)
+            
+        except Exception as e:
+            print(f"Success dialog error: {e}")
+            print(f"'{app_name}' has been successfully uninstalled.")
+    
+    def _show_icon_success(self, app_name: str, action: str) -> None:
+        """Show icon success message in a separate event cycle."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            
+            # Create a simple, lightweight success dialog
+            dialog = tk.Toplevel(self.tk_root)
+            dialog.title("AppImage Installer")
+            dialog.geometry("400x120")
+            dialog.resizable(False, False)
+            dialog.grab_set()
+            dialog.transient(self.tk_root)
+            
+            # Center on parent
+            self.tk_root.update_idletasks()
+            x = self.tk_root.winfo_x() + (self.tk_root.winfo_width() // 2) - 200
+            y = self.tk_root.winfo_y() + (self.tk_root.winfo_height() // 2) - 60
+            dialog.geometry(f"+{x}+{y}")
+            
+            # Content
+            frame = ttk.Frame(dialog, padding="20")
+            frame.pack(fill=tk.BOTH, expand=True)
+            
+            title = "Icon Found" if "found" in action else "Icon Updated"
+            ttk.Label(frame, text=title, 
+                     font=('TkDefaultFont', 12, 'bold')).pack(pady=(0, 10))
+            ttk.Label(frame, text=f"Successfully {action} a new icon for '{app_name}'!").pack(pady=(0, 15))
+            
+            def close_dialog():
+                dialog.grab_release()
+                dialog.destroy()
+            
+            ok_btn = ttk.Button(frame, text="OK", command=close_dialog, width=15)
+            ok_btn.pack(pady=5)
+            ok_btn.focus()
+            
+            # Bindings
+            dialog.bind('<Return>', lambda e: close_dialog())
+            dialog.bind('<Escape>', lambda e: close_dialog())
+            dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+            
+            # Auto-close after 3 seconds as backup
+            dialog.after(3000, close_dialog)
+            
+        except Exception as e:
+            print(f"Icon success dialog error: {e}")
+            title = "Icon Found" if "found" in action else "Icon Updated"
+            print(f"{title}: Successfully {action} a new icon for '{app_name}'!")
+    
+    def _show_uninstall_confirmation(self, app_name: str) -> DialogResult:
+        """Show uninstall confirmation dialog with proper cleanup."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            
+            # Create confirmation dialog
+            dialog = tk.Toplevel(self.tk_root)
+            dialog.title("AppImage Installer")
+            dialog.geometry("450x200")
+            dialog.resizable(False, False)
+            dialog.grab_set()
+            dialog.transient(self.tk_root)
+            
+            # Center on parent
+            self.tk_root.update_idletasks()
+            x = self.tk_root.winfo_x() + (self.tk_root.winfo_width() // 2) - 225
+            y = self.tk_root.winfo_y() + (self.tk_root.winfo_height() // 2) - 100
+            dialog.geometry(f"+{x}+{y}")
+            
+            # Content
+            frame = ttk.Frame(dialog, padding="20")
+            frame.pack(fill=tk.BOTH, expand=True)
+            
+            ttk.Label(frame, text="Confirm Uninstall", 
+                     font=('TkDefaultFont', 12, 'bold')).pack(pady=(0, 15))
+            
+            ttk.Label(frame, text=f"Are you sure you want to uninstall '{app_name}'?", 
+                     wraplength=400).pack(pady=(0, 10))
+            
+            details_text = ("This will remove:\n"
+                          "• Application shortcuts\n"
+                          "• Menu entries\n"
+                          "• Installed application files")
+            ttk.Label(frame, text=details_text, justify=tk.LEFT).pack(pady=(0, 20))
+            
+            # Result variable
+            result = [DialogResult.NO]
+            
+            def on_yes():
+                result[0] = DialogResult.YES
+                dialog.grab_release()
+                dialog.destroy()
+            
+            def on_no():
+                result[0] = DialogResult.NO
+                dialog.grab_release()
+                dialog.destroy()
+            
+            def on_close():
+                result[0] = DialogResult.NO
+                dialog.grab_release()
+                dialog.destroy()
+            
+            # Button frame
+            button_frame = ttk.Frame(frame)
+            button_frame.pack(anchor=tk.CENTER)
+            
+            yes_btn = ttk.Button(button_frame, text="Yes", command=on_yes, width=12)
+            yes_btn.pack(side=tk.LEFT, padx=(0, 10), pady=5)
+            
+            no_btn = ttk.Button(button_frame, text="No", command=on_no, width=12)
+            no_btn.pack(side=tk.LEFT, pady=5)
+            no_btn.focus()  # Default focus on No for safety
+            
+            # Bindings
+            dialog.bind('<Return>', lambda e: on_no())  # Enter defaults to No for safety
+            dialog.bind('<Escape>', lambda e: on_no())
+            dialog.protocol("WM_DELETE_WINDOW", on_close)
+            
+            # Wait for dialog to close
+            dialog.wait_window()
+            
+            return result[0]
+            
+        except Exception as e:
+            print(f"Confirmation dialog error: {e}")
+            # Fallback to console prompt
+            response = input(f"Uninstall '{app_name}'? (y/N): ").lower()
+            return DialogResult.YES if response == 'y' else DialogResult.NO
     
     def _find_icon_for_app(self, app: AppImageInfo) -> None:
         """Find and apply a better icon for the selected application."""
@@ -330,13 +497,9 @@ class AppImageManagerGUI:
                     app.desktop_file_path = self.desktop.create_desktop_file(app)
                     self.desktop.create_desktop_shortcut(app)
                     
-                    self.dialogs.show_info(
-                        "Icon Found",
-                        f"Successfully found and applied a new icon for '{app.name}'!"
-                    )
-                    
-                    # Schedule refresh after dialog closes to prevent GUI conflicts
-                    self.tk_root.after(100, self._refresh_tk_list)
+                    # Schedule success message and refresh separately
+                    self.tk_root.after(50, lambda: self._show_icon_success(app.name, "found and applied"))
+                    self.tk_root.after(200, self._refresh_tk_list)
                 else:
                     self.dialogs.show_info(
                         "No Icon Found",
@@ -373,13 +536,9 @@ class AppImageManagerGUI:
                 app.desktop_file_path = self.desktop.create_desktop_file(app)
                 self.desktop.create_desktop_shortcut(app)
                 
-                self.dialogs.show_info(
-                    "Icon Updated",
-                    f"Found and applied a system icon for '{app.name}'!"
-                )
-                
-                # Schedule refresh after dialog closes to prevent GUI conflicts
-                self.tk_root.after(100, self._refresh_tk_list)
+                # Schedule success message and refresh separately  
+                self.tk_root.after(50, lambda: self._show_icon_success(app.name, "updated"))
+                self.tk_root.after(200, self._refresh_tk_list)
             else:
                 self.dialogs.show_info(
                     "No Better Icon",
