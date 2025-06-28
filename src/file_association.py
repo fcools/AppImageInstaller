@@ -69,6 +69,9 @@ class FileAssociation:
             # Also set as default for executable types that might conflict
             self._set_additional_defaults()
             
+            # Create main user-facing desktop entry
+            self._create_main_application_entry()
+            
             # Force system-wide desktop database update
             self._update_system_desktop_database()
             
@@ -98,6 +101,11 @@ class FileAssociation:
             app_file = self.applications_dir / "appimage-installer.desktop"
             if app_file.exists():
                 app_file.unlink()
+                
+            # Remove main application entry
+            main_app_file = self.applications_dir / "appimage-installer-main.desktop"
+            if main_app_file.exists():
+                main_app_file.unlink()
             
             # Update databases
             self._update_mime_database()
@@ -172,12 +180,12 @@ class FileAssociation:
             desktop_content = f"""[Desktop Entry]
 Version=1.0
 Type=Application
-Name=AppImage Installer
-Comment=Install and manage AppImage applications
+Name=AppImage Installer (File Handler)
+Comment=Handle AppImage file associations (hidden from launcher)
 Exec={script_path} %f
 Icon=application-x-executable
 StartupNotify=false
-NoDisplay=false
+NoDisplay=true
 MimeType=application/x-appimage;application/x-executable;application/x-sharedlib;application/octet-stream;
 Categories=System;Utility;
 X-AppStream-Ignore=true
@@ -194,6 +202,46 @@ X-AppStream-Ignore=true
             
         except Exception as e:
             print(f"Error creating application entry: {e}")
+            return False
+    
+    def _create_main_application_entry(self) -> bool:
+        """
+        Create main user-facing desktop application entry.
+        
+        Returns:
+            bool: True if creation successful, False otherwise.
+        """
+        try:
+            # Get the path to our main script
+            script_path = self._get_script_path()
+            if not script_path:
+                return False
+            
+            desktop_content = f"""[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AppImage Installer
+Comment=Install and manage AppImage applications
+Exec={script_path} --manage
+Icon=application-x-executable
+StartupNotify=true
+NoDisplay=false
+Categories=System;Settings;PackageManager;
+Keywords=appimage;installer;manager;install;uninstall;applications;
+Terminal=false
+"""
+            
+            app_file = self.applications_dir / "appimage-installer-main.desktop"
+            with open(app_file, 'w', encoding='utf-8') as f:
+                f.write(desktop_content)
+            
+            # Make executable
+            os.chmod(app_file, 0o755)
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error creating main application entry: {e}")
             return False
     
     def _get_script_path(self) -> Optional[str]:
