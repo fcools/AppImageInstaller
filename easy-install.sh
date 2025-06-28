@@ -86,7 +86,8 @@ install_dependencies() {
             echo -e "${YELLOW}Installing packages for Debian/Ubuntu...${NC}"
             sudo apt update >/dev/null 2>&1
             sudo apt install -y python3-pip python3-gi python3-gi-cairo \
-                gir1.2-gtk-3.0 python3-pil python3-magic libmagic1 >/dev/null 2>&1
+                gir1.2-gtk-3.0 python3-pil python3-magic libmagic1 \
+                python3-packaging >/dev/null 2>&1
             ;;
         fedora)
             echo -e "${YELLOW}Installing packages for Fedora...${NC}"
@@ -152,7 +153,18 @@ install_appimage_installer() {
     
     # Install using pip (user install to avoid permission issues)
     echo -e "${YELLOW}🔧 Installing AppImage Installer...${NC}"
-    python3 -m pip install --user . >/dev/null 2>&1
+    
+    # Handle Ubuntu 24.04+ externally managed environment
+    if python3 -m pip install --user . >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ Installed using pip${NC}"
+    else
+        echo -e "${YELLOW}Using fallback method for externally managed environment...${NC}"
+        # Install dependencies from system packages and install without deps
+        if [[ "$DISTRO" == "ubuntu" ]]; then
+            sudo apt install -y python3-packaging >/dev/null 2>&1
+        fi
+        python3 -m pip install --user --break-system-packages --no-deps . >/dev/null 2>&1
+    fi
     
     # Ensure ~/.local/bin is in PATH
     LOCAL_BIN="$HOME/.local/bin"
