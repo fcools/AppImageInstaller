@@ -87,7 +87,7 @@ install_dependencies() {
             sudo apt update >/dev/null 2>&1
             sudo apt install -y python3-pip python3-gi python3-gi-cairo \
                 gir1.2-gtk-3.0 python3-pil python3-magic libmagic1 \
-                python3-packaging >/dev/null 2>&1
+                python3-packaging python3-tk >/dev/null 2>&1
             ;;
         fedora)
             echo -e "${YELLOW}Installing packages for Fedora...${NC}"

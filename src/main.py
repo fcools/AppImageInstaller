@@ -25,6 +25,7 @@ def main():
         epilog="""
 Examples:
   appimage-installer myapp.AppImage    # Install/manage an AppImage
+  appimage-installer --manage          # Open GUI to manage installed apps
   appimage-installer --register        # Register file associations
   appimage-installer --unregister      # Unregister file associations
         """
@@ -49,6 +50,12 @@ Examples:
     )
     
     parser.add_argument(
+        '--manage',
+        action='store_true',
+        help='Open AppImage Manager GUI to view and manage installed apps'
+    )
+    
+    parser.add_argument(
         '--version',
         action='version',
         version='AppImage Installer 1.0.0'
@@ -62,6 +69,8 @@ Examples:
             return handle_register()
         elif args.unregister:
             return handle_unregister()
+        elif args.manage:
+            return handle_manage()
         
         # Handle AppImage file
         if args.appimage_file:
@@ -144,6 +153,29 @@ def handle_unregister() -> int:
             
     except Exception as e:
         print(f"Error unregistering file associations: {e}")
+        return 1
+
+
+def handle_manage() -> int:
+    """
+    Launch the AppImage Manager GUI.
+    
+    Returns:
+        int: Exit code (0 for success, 1 for error).
+    """
+    try:
+        from .gui_manager import AppImageManagerGUI
+        
+        gui = AppImageManagerGUI()
+        gui.show()
+        return 0
+        
+    except ImportError as e:
+        print(f"Error: GUI framework not available: {e}")
+        print("Please install tkinter or GTK for GUI support.")
+        return 1
+    except Exception as e:
+        print(f"Error launching AppImage Manager: {e}")
         return 1
 
 
