@@ -192,6 +192,16 @@ install_appimage_installer() {
         echo -e "${YELLOW}⚠️  File association registration may require re-login${NC}"
     }
     
+    # Update icon cache to ensure our new icon is available
+    echo -e "${YELLOW}🎨 Updating icon cache...${NC}"
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+    fi
+    # Also try user hicolor theme update
+    if [ -d "$HOME/.local/share/icons/hicolor" ]; then
+        touch "$HOME/.local/share/icons/hicolor/.update_timestamp" >/dev/null 2>&1 || true
+    fi
+    
     # Cleanup
     cd /
     rm -rf "$TEMP_DIR"

@@ -51,8 +51,10 @@ class FileAssociation:
             if not self._create_mime_type():
                 return False
             
-            # Create desktop application entry
-            if not self._create_application_entry():
+            # Create desktop application entries using DesktopIntegration
+            from .desktop_integration import DesktopIntegration
+            desktop_integration = DesktopIntegration()
+            if not desktop_integration.create_appimage_installer_desktop_files():
                 return False
             
             # Update MIME database
@@ -68,9 +70,6 @@ class FileAssociation:
             
             # Also set as default for executable types that might conflict
             self._set_additional_defaults()
-            
-            # Create main user-facing desktop entry
-            self._create_main_application_entry()
             
             # Force system-wide desktop database update
             self._update_system_desktop_database()
@@ -97,15 +96,10 @@ class FileAssociation:
             if mime_file.exists():
                 mime_file.unlink()
             
-            # Remove desktop application entry
-            app_file = self.applications_dir / "appimage-installer.desktop"
-            if app_file.exists():
-                app_file.unlink()
-                
-            # Remove main application entry
-            main_app_file = self.applications_dir / "appimage-installer-main.desktop"
-            if main_app_file.exists():
-                main_app_file.unlink()
+            # Remove desktop application entries using DesktopIntegration
+            from .desktop_integration import DesktopIntegration
+            desktop_integration = DesktopIntegration()
+            desktop_integration.remove_appimage_installer_desktop_files()
             
             # Update databases
             self._update_mime_database()
@@ -126,8 +120,9 @@ class FileAssociation:
         """
         mime_file = self.packages_dir / "appimage-installer.xml"
         app_file = self.applications_dir / "appimage-installer.desktop"
+        handler_file = self.applications_dir / "appimage-installer-handler.desktop"
         
-        return mime_file.exists() and app_file.exists()
+        return mime_file.exists() and app_file.exists() and handler_file.exists()
     
     def _create_mime_type(self) -> bool:
         """
@@ -142,7 +137,7 @@ class FileAssociation:
     <mime-type type="application/x-appimage">
         <comment>AppImage application bundle</comment>
         <comment xml:lang="en">AppImage application bundle</comment>
-        <icon name="application-x-executable"/>
+        <icon name="appimage-installer"/>
         <glob pattern="*.AppImage" weight="95"/>
         <glob pattern="*.appimage" weight="95"/>
         <magic priority="90">
@@ -164,85 +159,7 @@ class FileAssociation:
             print(f"Error creating MIME type: {e}")
             return False
     
-    def _create_application_entry(self) -> bool:
-        """
-        Create desktop application entry for handling .AppImage files.
-        
-        Returns:
-            bool: True if creation successful, False otherwise.
-        """
-        try:
-            # Get the path to our main script
-            script_path = self._get_script_path()
-            if not script_path:
-                return False
-            
-            desktop_content = f"""[Desktop Entry]
-Version=1.0
-Type=Application
-Name=AppImage Installer (File Handler)
-Comment=Handle AppImage file associations (hidden from launcher)
-Exec={script_path} %f
-Icon=application-x-executable
-StartupNotify=false
-NoDisplay=true
-MimeType=application/x-appimage;application/x-executable;application/x-sharedlib;application/octet-stream;
-Categories=System;Utility;
-X-AppStream-Ignore=true
-"""
-            
-            app_file = self.applications_dir / "appimage-installer.desktop"
-            with open(app_file, 'w', encoding='utf-8') as f:
-                f.write(desktop_content)
-            
-            # Make executable
-            os.chmod(app_file, 0o755)
-            
-            return True
-            
-        except Exception as e:
-            print(f"Error creating application entry: {e}")
-            return False
-    
-    def _create_main_application_entry(self) -> bool:
-        """
-        Create main user-facing desktop application entry.
-        
-        Returns:
-            bool: True if creation successful, False otherwise.
-        """
-        try:
-            # Get the path to our main script
-            script_path = self._get_script_path()
-            if not script_path:
-                return False
-            
-            desktop_content = f"""[Desktop Entry]
-Version=1.0
-Type=Application
-Name=AppImage Installer
-Comment=Install and manage AppImage applications
-Exec={script_path} --manage
-Icon=application-x-executable
-StartupNotify=true
-NoDisplay=false
-Categories=System;Settings;PackageManager;
-Keywords=appimage;installer;manager;install;uninstall;applications;
-Terminal=false
-"""
-            
-            app_file = self.applications_dir / "appimage-installer-main.desktop"
-            with open(app_file, 'w', encoding='utf-8') as f:
-                f.write(desktop_content)
-            
-            # Make executable
-            os.chmod(app_file, 0o755)
-            
-            return True
-            
-        except Exception as e:
-            print(f"Error creating main application entry: {e}")
-            return False
+
     
     def _get_script_path(self) -> Optional[str]:
         """
@@ -298,7 +215,7 @@ Terminal=false
         """
         try:
             result = subprocess.run([
-                'xdg-mime', 'default', 'appimage-installer.desktop', 'application/x-appimage'
+                'xdg-mime', 'default', 'appimage-installer-handler.desktop', 'application/x-appimage'
             ], capture_output=True, timeout=30)
             
             return result.returncode == 0
@@ -340,7 +257,7 @@ Terminal=false
         for mime_type in additional_types:
             try:
                 subprocess.run([
-                    'xdg-mime', 'default', 'appimage-installer.desktop', mime_type
+                    'xdg-mime', 'default', 'appimage-installer-handler.desktop', mime_type
                 ], capture_output=True, timeout=30)
             except Exception:
                 pass  # Don't fail if one doesn't work
@@ -363,7 +280,7 @@ Terminal=false
     <mime-type type="application/x-appimage">
         <comment>AppImage application bundle</comment>
         <comment xml:lang="en">AppImage application bundle</comment>
-        <icon name="application-x-executable"/>
+        <icon name="appimage-installer"/>
         <glob pattern="*.AppImage" weight="95"/>
         <glob pattern="*.appimage" weight="95"/>
         <magic priority="90">

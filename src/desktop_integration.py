@@ -266,4 +266,88 @@ StartupWMClass={info.name}
             
         except Exception as e:
             print(f"Error launching AppImage: {e}")
+            return False
+    
+    def create_appimage_installer_desktop_files(self) -> bool:
+        """
+        Create desktop files for AppImage Installer application itself.
+        
+        Returns:
+            bool: True if creation successful, False otherwise.
+        """
+        try:
+            # Create main AppImage Installer desktop entry (for GUI manager)
+            main_desktop_content = """[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AppImage Installer
+Comment=Manage and install AppImage applications with ease
+Exec=appimage-installer --manage
+Icon=appimage-installer
+Categories=System;Settings;PackageManager;
+Terminal=false
+StartupNotify=true
+StartupWMClass=AppImage Installer
+Keywords=appimage;install;package;application;manager;
+"""
+            
+            main_desktop_path = self.applications_dir / "appimage-installer.desktop"
+            with open(main_desktop_path, 'w', encoding='utf-8') as f:
+                f.write(main_desktop_content)
+            os.chmod(main_desktop_path, 0o755)
+            
+            # Create hidden file handler desktop entry (for file associations)
+            handler_desktop_content = """[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AppImage Installer (File Handler)
+Comment=Handle AppImage files for installation
+Exec=appimage-installer %f
+Icon=appimage-installer
+Categories=System;
+Terminal=false
+StartupNotify=true
+NoDisplay=true
+MimeType=application/x-appimage;application/vnd.appimage;
+"""
+            
+            handler_desktop_path = self.applications_dir / "appimage-installer-handler.desktop"
+            with open(handler_desktop_path, 'w', encoding='utf-8') as f:
+                f.write(handler_desktop_content)
+            os.chmod(handler_desktop_path, 0o755)
+            
+            # Update desktop database
+            self._update_desktop_database()
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error creating AppImage Installer desktop files: {e}")
+            return False
+    
+    def remove_appimage_installer_desktop_files(self) -> bool:
+        """
+        Remove AppImage Installer desktop files.
+        
+        Returns:
+            bool: True if removal successful, False otherwise.
+        """
+        try:
+            # Remove main desktop file
+            main_desktop_path = self.applications_dir / "appimage-installer.desktop"
+            if main_desktop_path.exists():
+                main_desktop_path.unlink()
+            
+            # Remove handler desktop file
+            handler_desktop_path = self.applications_dir / "appimage-installer-handler.desktop"
+            if handler_desktop_path.exists():
+                handler_desktop_path.unlink()
+            
+            # Update desktop database
+            self._update_desktop_database()
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error removing AppImage Installer desktop files: {e}")
             return False 
