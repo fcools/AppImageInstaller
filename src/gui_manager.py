@@ -39,10 +39,14 @@ class AppImageManagerGUI:
         self.desktop = DesktopIntegration()
         self.apps = []
         self.selected_app = None
+        self.dialogs = None  # Will be initialized after creating GUI
         
         # Try Tkinter first for better compatibility
         if HAS_TKINTER:
             self._create_tkinter_gui()
+            # Initialize dialogs with the Tkinter root window to prevent conflicts
+            from .gui_dialogs import NativeDialogs
+            self.dialogs = NativeDialogs(parent_window=self.tk_root)
         else:
             raise RuntimeError("No GUI framework available. Please install tkinter.")
     
@@ -233,20 +237,20 @@ class AppImageManagerGUI:
             if self.desktop.launch_appimage(app.exec_command):
                 pass  # Success, no message needed
             else:
-                dialogs.show_error(
+                self.dialogs.show_error(
                     "Launch Failed",
                     f"Could not launch '{app.name}'.\n\n"
                     f"The application file may be missing or corrupted."
                 )
         except Exception as e:
-            dialogs.show_error(
+            self.dialogs.show_error(
                 "Launch Error",
                 f"Error launching '{app.name}': {str(e)}"
             )
     
     def _uninstall_app(self, app: AppImageInfo) -> None:
         """Uninstall the selected application."""
-        response = dialogs.show_question(
+        response = self.dialogs.show_question(
             "Confirm Uninstall",
             f"Are you sure you want to uninstall '{app.name}'?\n\n"
             f"This will remove:\n"
@@ -267,7 +271,7 @@ class AppImageManagerGUI:
                 
                 # Uninstall AppImage
                 if self.manager.uninstall_appimage(app.appimage_path):
-                    dialogs.show_info(
+                    self.dialogs.show_info(
                         "Uninstall Successful",
                         f"'{app.name}' has been successfully uninstalled."
                     )
@@ -275,13 +279,13 @@ class AppImageManagerGUI:
                     # Refresh the list
                     self._refresh_tk_list()
                 else:
-                    dialogs.show_error(
+                    self.dialogs.show_error(
                         "Uninstall Failed",
                         f"Could not completely uninstall '{app.name}'."
                     )
                     
             except Exception as e:
-                dialogs.show_error(
+                self.dialogs.show_error(
                     "Uninstall Error",
                     f"Error during uninstallation: {str(e)}"
                 )
@@ -289,7 +293,7 @@ class AppImageManagerGUI:
     def _find_icon_for_app(self, app: AppImageInfo) -> None:
         """Find and apply a better icon for the selected application."""
         # Ask user for consent to search web
-        response = dialogs.show_question(
+        response = self.dialogs.show_question(
             "Search for Icon",
             f"Would you like to search the web for a better icon for '{app.name}'?\n\n"
             f"This will:\n"
@@ -326,7 +330,7 @@ class AppImageManagerGUI:
                     app.desktop_file_path = self.desktop.create_desktop_file(app)
                     self.desktop.create_desktop_shortcut(app)
                     
-                    dialogs.show_info(
+                    self.dialogs.show_info(
                         "Icon Found",
                         f"Successfully found and applied a new icon for '{app.name}'!"
                     )
@@ -334,14 +338,14 @@ class AppImageManagerGUI:
                     # Refresh the list
                     self._refresh_tk_list()
                 else:
-                    dialogs.show_info(
+                    self.dialogs.show_info(
                         "No Icon Found",
                         f"Could not find a suitable icon for '{app.name}' online.\n"
                         f"The application will continue to use the default icon."
                     )
                     
             except Exception as e:
-                dialogs.show_error(
+                self.dialogs.show_error(
                     "Icon Search Error",
                     f"Error searching for icon: {str(e)}"
                 )
@@ -369,7 +373,7 @@ class AppImageManagerGUI:
                 app.desktop_file_path = self.desktop.create_desktop_file(app)
                 self.desktop.create_desktop_shortcut(app)
                 
-                dialogs.show_info(
+                self.dialogs.show_info(
                     "Icon Updated",
                     f"Found and applied a system icon for '{app.name}'!"
                 )
@@ -377,7 +381,7 @@ class AppImageManagerGUI:
                 # Refresh the list
                 self._refresh_tk_list()
             else:
-                dialogs.show_info(
+                self.dialogs.show_info(
                     "No Better Icon",
                     f"Could not find a better system icon for '{app.name}'.\n"
                     f"The application will continue to use the current icon."

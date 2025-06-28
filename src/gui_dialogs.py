@@ -35,10 +35,15 @@ class NativeDialogs:
     if GTK is not available.
     """
     
-    def __init__(self):
-        """Initialize the dialog system with the best available toolkit."""
+    def __init__(self, parent_window=None):
+        """Initialize the dialog system with the best available toolkit.
+        
+        Args:
+            parent_window: Optional parent window for dialogs (Tkinter root window).
+        """
         self._gtk_available = self._check_gtk()
         self._toolkit = "gtk" if self._gtk_available else "tkinter"
+        self._parent_window = parent_window
     
     def _check_gtk(self) -> bool:
         """
@@ -69,7 +74,7 @@ class NativeDialogs:
         if self._toolkit == "gtk":
             return self._show_gtk_dialog(DialogType.INFO, title, message)
         else:
-            return self._show_tkinter_dialog(DialogType.INFO, title, message)
+            return self._show_tkinter_dialog(DialogType.INFO, title, message, self._parent_window)
     
     def show_question(self, title: str, message: str) -> DialogResult:
         """
@@ -85,7 +90,7 @@ class NativeDialogs:
         if self._toolkit == "gtk":
             return self._show_gtk_dialog(DialogType.QUESTION, title, message)
         else:
-            return self._show_tkinter_dialog(DialogType.QUESTION, title, message)
+            return self._show_tkinter_dialog(DialogType.QUESTION, title, message, self._parent_window)
     
     def show_error(self, title: str, message: str) -> DialogResult:
         """
@@ -101,7 +106,7 @@ class NativeDialogs:
         if self._toolkit == "gtk":
             return self._show_gtk_dialog(DialogType.ERROR, title, message)
         else:
-            return self._show_tkinter_dialog(DialogType.ERROR, title, message)
+            return self._show_tkinter_dialog(DialogType.ERROR, title, message, self._parent_window)
     
     def _show_gtk_dialog(self, dialog_type: DialogType, title: str, message: str) -> DialogResult:
         """
@@ -159,7 +164,7 @@ class NativeDialogs:
             # Fallback to tkinter if GTK fails
             return self._show_tkinter_dialog(dialog_type, title, message)
     
-    def _show_tkinter_dialog(self, dialog_type: DialogType, title: str, message: str) -> DialogResult:
+    def _show_tkinter_dialog(self, dialog_type: DialogType, title: str, message: str, parent=None) -> DialogResult:
         """
         Show a Tkinter dialog as fallback.
         
@@ -167,6 +172,7 @@ class NativeDialogs:
             dialog_type (DialogType): Type of dialog to show.
             title (str): Dialog title.
             message (str): Dialog message.
+            parent: Optional parent window to use instead of creating new root.
             
         Returns:
             DialogResult: User's response.
@@ -175,21 +181,31 @@ class NativeDialogs:
             import tkinter as tk
             from tkinter import messagebox
             
-            # Hide the root window
-            root = tk.Tk()
-            root.withdraw()
+            # Use existing parent window if available, otherwise create temporary root
+            if parent is not None:
+                # Use the existing parent window - no need to create/destroy anything
+                root = parent
+                should_destroy = False
+            else:
+                # Create temporary root window for standalone dialogs
+                root = tk.Tk()
+                root.withdraw()
+                should_destroy = True
             
             if dialog_type == DialogType.QUESTION:
-                result = messagebox.askyesno(title, message)
-                root.destroy()
+                result = messagebox.askyesno(title, message, parent=root)
+                if should_destroy:
+                    root.destroy()
                 return DialogResult.YES if result else DialogResult.NO
             elif dialog_type == DialogType.ERROR:
-                messagebox.showerror(title, message)
-                root.destroy()
+                messagebox.showerror(title, message, parent=root)
+                if should_destroy:
+                    root.destroy()
                 return DialogResult.OK
             else:  # INFO
-                messagebox.showinfo(title, message)
-                root.destroy()
+                messagebox.showinfo(title, message, parent=root)
+                if should_destroy:
+                    root.destroy()
                 return DialogResult.OK
                 
         except Exception as e:
