@@ -90,6 +90,9 @@ Now you can double-click any .AppImage file to install it!
 # Install/manage a specific AppImage
 appimage-installer myapp.AppImage
 
+# Open GUI Manager to view and manage all installed apps
+appimage-installer --manage
+
 # Register file associations
 appimage-installer --register
 
@@ -99,6 +102,24 @@ appimage-installer --unregister
 # Show help
 appimage-installer --help
 ```
+
+### 🖥️ GUI Manager
+
+The AppImage Manager provides a convenient graphical interface for managing your installed AppImage applications:
+
+![AppImage Manager](docs/manager-screenshot.png)
+
+**Features:**
+- View all installed AppImage applications in one place
+- Launch applications directly from the manager
+- Uninstall applications even if original files are deleted
+- Sort by name, version, or installation date
+- Shows installation location and details
+
+**Access the Manager:**
+- Command line: `appimage-installer --manage`
+- Applications menu: Search for "AppImage Manager"
+- Perfect for managing apps when original .AppImage files are missing
 
 ### User Experience Flow
 
@@ -112,7 +133,8 @@ When you double-click an AppImage:
 ### System Requirements
 - Linux distribution with XDG support
 - Python 3.8 or higher
-- GTK 3.0+ (optional, for native dialogs)
+- Tkinter (for GUI Manager) - usually `python3-tk` package
+- GTK 3.0+ (optional, for enhanced native dialogs)
 
 ### Python Dependencies
 - `PyGObject>=3.42.0` (for GTK dialogs)
@@ -126,7 +148,7 @@ For optimal functionality, install these system packages:
 
 **Ubuntu/Debian:**
 ```bash
-sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 libmagic1
+sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 libmagic1 python3-tk
 ```
 
 **Fedora:**
