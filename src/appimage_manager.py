@@ -196,6 +196,92 @@ class AppImageManager:
         abs_path = str(Path(appimage_path).absolute())
         return abs_path in registry
     
+    def install_appimage(self, info: AppImageInfo) -> bool:
+        """
+        Install AppImage by copying to storage directory and updating exec path.
+        
+        Args:
+            info (AppImageInfo): AppImage information to install.
+            
+        Returns:
+            bool: True if installation successful, False otherwise.
+        """
+        try:
+            # Copy AppImage to storage directory
+            copied_path = self._copy_to_storage(info.appimage_path, info.name)
+            if not copied_path:
+                return False
+            
+            # Update exec command to point to the copy
+            info.exec_command = str(copied_path)
+            
+            # Register the AppImage
+            return self.register_appimage(info)
+            
+        except Exception as e:
+            print(f"Error installing AppImage: {e}")
+            return False
+    
+    def _copy_to_storage(self, appimage_path: str, app_name: str) -> Optional[Path]:
+        """
+        Copy AppImage to storage directory and make it executable.
+        
+        Args:
+            appimage_path (str): Original AppImage path.
+            app_name (str): Application name for filename.
+            
+        Returns:
+            Optional[Path]: Path to copied file or None if failed.
+        """
+        try:
+            source_path = Path(appimage_path)
+            
+            # Create safe filename
+            safe_name = self._sanitize_filename(app_name)
+            extension = source_path.suffix if source_path.suffix else '.AppImage'
+            target_filename = f"{safe_name}{extension}"
+            target_path = self.appimage_storage / target_filename
+            
+            # Handle filename conflicts
+            counter = 1
+            while target_path.exists():
+                name_part = safe_name
+                target_filename = f"{name_part}_{counter}{extension}"
+                target_path = self.appimage_storage / target_filename
+                counter += 1
+            
+            # Copy file
+            shutil.copy2(source_path, target_path)
+            
+            # Make copy executable
+            os.chmod(target_path, 0o755)
+            
+            return target_path
+            
+        except Exception as e:
+            print(f"Error copying AppImage to storage: {e}")
+            return None
+    
+    def _sanitize_filename(self, name: str) -> str:
+        """
+        Sanitize a name for use as filename.
+        
+        Args:
+            name (str): Original name.
+            
+        Returns:
+            str: Sanitized filename.
+        """
+        # Remove invalid characters and replace spaces
+        safe_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+        sanitized = "".join(c if c in safe_chars else "_" for c in name)
+        
+        # Remove multiple underscores and trim
+        while "__" in sanitized:
+            sanitized = sanitized.replace("__", "_")
+        
+        return sanitized.strip("_")
+    
     def register_appimage(self, info: AppImageInfo) -> bool:
         """
         Register an AppImage in the system registry.
@@ -219,6 +305,32 @@ class AppImageManager:
             
         except Exception as e:
             print(f"Error registering AppImage: {e}")
+            return False
+    
+    def uninstall_appimage(self, appimage_path: str) -> bool:
+        """
+        Uninstall an AppImage by removing copied file and registry entry.
+        
+        Args:
+            appimage_path (str): Path to the original AppImage file.
+            
+        Returns:
+            bool: True if uninstallation successful, False otherwise.
+        """
+        try:
+            # Get registered info to find the copied file
+            info = self.get_registered_info(appimage_path)
+            if info and info.exec_command:
+                # Remove the copied executable file
+                exec_path = Path(info.exec_command)
+                if exec_path.exists() and exec_path.parent == self.appimage_storage:
+                    exec_path.unlink()
+            
+            # Unregister from registry
+            return self.unregister_appimage(appimage_path)
+            
+        except Exception as e:
+            print(f"Error uninstalling AppImage: {e}")
             return False
     
     def unregister_appimage(self, appimage_path: str) -> bool:

@@ -95,8 +95,8 @@ class AppImageHandler:
                 # Uninstall the AppImage
                 return self._uninstall_appimage(info)
             else:
-                # Launch the AppImage
-                return self._launch_appimage(appimage_path, app_name)
+                # Launch the AppImage (use exec_command which points to the executable copy)
+                return self._launch_appimage(info.exec_command, app_name)
                 
         except Exception as e:
             dialogs.show_error(
@@ -163,9 +163,20 @@ class AppImageHandler:
             bool: True if installation was successful, False otherwise.
         """
         try:
-            # Create desktop file
+            # Install AppImage (copy to storage and register)
+            # This updates info.exec_command to point to the executable copy
+            if not self.manager.install_appimage(info):
+                dialogs.show_error(
+                    "Installation Failed",
+                    "Could not install AppImage to system."
+                )
+                return False
+            
+            # Create desktop file (after installation so exec_command points to copy)
             desktop_path = self.desktop.create_desktop_file(info)
             if not desktop_path:
+                # Clean up on failure
+                self.manager.uninstall_appimage(info.appimage_path)
                 dialogs.show_error(
                     "Installation Failed",
                     "Could not create launcher shortcut."
@@ -178,17 +189,6 @@ class AppImageHandler:
             # Create desktop shortcut (optional)
             self.desktop.create_desktop_shortcut(info)
             
-            # Register in system
-            if not self.manager.register_appimage(info):
-                # Clean up on failure
-                self.desktop.remove_desktop_file(desktop_path)
-                self.desktop.remove_desktop_shortcut(info)
-                dialogs.show_error(
-                    "Registration Failed",
-                    "Could not register AppImage in system database."
-                )
-                return False
-            
             # Show success message
             dialogs.show_info(
                 "Installation Successful",
@@ -196,8 +196,8 @@ class AppImageHandler:
                 f"You can now find it in your applications menu."
             )
             
-            # Launch the application
-            return self._launch_appimage(info.appimage_path, info.name)
+            # Launch the application (use exec_command which points to the executable copy)
+            return self._launch_appimage(info.exec_command, info.name)
             
         except Exception as e:
             dialogs.show_error(
@@ -224,8 +224,8 @@ class AppImageHandler:
             # Remove desktop shortcut
             self.desktop.remove_desktop_shortcut(info)
             
-            # Unregister from system
-            self.manager.unregister_appimage(info.appimage_path)
+            # Uninstall AppImage (remove copy and unregister)
+            self.manager.uninstall_appimage(info.appimage_path)
             
             # Show success message
             dialogs.show_info(

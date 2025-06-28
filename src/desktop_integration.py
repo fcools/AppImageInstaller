@@ -240,7 +240,7 @@ StartupWMClass={info.name}
         Launch an AppImage file.
         
         Args:
-            appimage_path (str): Path to the AppImage file.
+            appimage_path (str): Path to the AppImage file (should be executable copy).
             
         Returns:
             bool: True if launch successful, False otherwise.
@@ -248,9 +248,14 @@ StartupWMClass={info.name}
         try:
             path = Path(appimage_path)
             
-            # Ensure file is executable
+            # Check if file exists and is executable
+            if not path.exists():
+                print(f"AppImage file not found: {appimage_path}")
+                return False
+                
             if not os.access(path, os.X_OK):
-                os.chmod(path, 0o755)
+                print(f"AppImage file is not executable: {appimage_path}")
+                return False
             
             # Launch AppImage in background
             subprocess.Popen([str(path)], 
