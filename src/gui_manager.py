@@ -276,8 +276,8 @@ class AppImageManagerGUI:
                         f"'{app.name}' has been successfully uninstalled."
                     )
                     
-                    # Refresh the list
-                    self._refresh_tk_list()
+                    # Schedule refresh after dialog closes to prevent GUI conflicts
+                    self.tk_root.after(100, self._refresh_tk_list)
                 else:
                     self.dialogs.show_error(
                         "Uninstall Failed",
@@ -335,8 +335,8 @@ class AppImageManagerGUI:
                         f"Successfully found and applied a new icon for '{app.name}'!"
                     )
                     
-                    # Refresh the list
-                    self._refresh_tk_list()
+                    # Schedule refresh after dialog closes to prevent GUI conflicts
+                    self.tk_root.after(100, self._refresh_tk_list)
                 else:
                     self.dialogs.show_info(
                         "No Icon Found",
@@ -378,8 +378,8 @@ class AppImageManagerGUI:
                     f"Found and applied a system icon for '{app.name}'!"
                 )
                 
-                # Refresh the list
-                self._refresh_tk_list()
+                # Schedule refresh after dialog closes to prevent GUI conflicts
+                self.tk_root.after(100, self._refresh_tk_list)
             else:
                 self.dialogs.show_info(
                     "No Better Icon",
