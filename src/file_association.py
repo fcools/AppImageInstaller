@@ -129,11 +129,15 @@ class FileAssociation:
         <comment>AppImage application bundle</comment>
         <comment xml:lang="en">AppImage application bundle</comment>
         <icon name="application-x-executable"/>
-        <glob pattern="*.AppImage"/>
-        <glob pattern="*.appimage"/>
-        <magic priority="50">
-            <match type="string" offset="0:1024" value="AppImage"/>
+        <glob pattern="*.AppImage" weight="90"/>
+        <glob pattern="*.appimage" weight="90"/>
+        <magic priority="80">
+            <match type="string" offset="0:102400" value="AppImage"/>
         </magic>
+        <magic priority="75">
+            <match type="string" offset="0:102400" value="appimage"/>
+        </magic>
+        <sub-class-of type="application/x-executable"/>
     </mime-type>
 </mime-info>'''
             

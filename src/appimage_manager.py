@@ -112,15 +112,38 @@ class AppImageManager:
             if not path.exists() or not os.access(path, os.X_OK):
                 return False
             
-            # Check file magic
+            # Check filename pattern first (most reliable)
+            filename = path.name.lower()
+            if filename.endswith('.appimage') or filename.endswith('.AppImage'):
+                return True
+            
+            # Check file magic for executables
             mime_type = magic.from_file(str(path), mime=True)
-            if mime_type not in ['application/x-executable', 'application/x-appimage']:
+            if not mime_type.startswith('application/'):
                 return False
             
-            # Check if it contains AppImage signature
-            with open(path, 'rb') as f:
-                content = f.read(1024)  # Read first 1KB
-                return b'AppImage' in content or b'appimage' in content
+            # Check if it contains AppImage signature anywhere in file
+            # AppImage signatures can be anywhere, not just in first 1KB
+            try:
+                with open(path, 'rb') as f:
+                    # Read in chunks to handle large files efficiently
+                    chunk_size = 8192
+                    while True:
+                        chunk = f.read(chunk_size)
+                        if not chunk:
+                            break
+                        if b'AppImage' in chunk or b'appimage' in chunk:
+                            return True
+                        # Only check first 100KB to avoid reading entire large files
+                        if f.tell() > 100 * 1024:
+                            break
+                            
+                # If no AppImage signature found, still accept files ending with .AppImage
+                return filename.endswith('.appimage')
+                
+            except Exception:
+                # If reading fails, fall back to filename check
+                return filename.endswith('.appimage')
                 
         except Exception:
             return False
