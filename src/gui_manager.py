@@ -114,6 +114,10 @@ class AppImageManagerGUI:
                                           command=self._on_tk_uninstall, state=tk.DISABLED)
         self.tk_uninstall_btn.pack(side=tk.LEFT, padx=(0, 5))
         
+        self.tk_icon_btn = ttk.Button(button_frame, text="Find Icon", 
+                                     command=self._on_tk_find_icon, state=tk.DISABLED)
+        self.tk_icon_btn.pack(side=tk.LEFT, padx=(0, 5))
+        
         refresh_btn = ttk.Button(button_frame, text="Refresh", command=self._on_tk_refresh)
         refresh_btn.pack(side=tk.LEFT, padx=(0, 5))
         
@@ -183,14 +187,21 @@ class AppImageManagerGUI:
                 self.selected_app = self.apps[app_index]
                 self.tk_launch_btn.config(state=tk.NORMAL)
                 self.tk_uninstall_btn.config(state=tk.NORMAL)
+                # Enable icon button if app has no custom icon or uses default
+                has_default_icon = (not self.selected_app.icon_path or 
+                                  self.selected_app.icon_path == 'application-x-executable' or
+                                  'application' in self.selected_app.icon_path)
+                self.tk_icon_btn.config(state=tk.NORMAL if has_default_icon else tk.DISABLED)
             except (ValueError, IndexError):
                 self.selected_app = None
                 self.tk_launch_btn.config(state=tk.DISABLED)
                 self.tk_uninstall_btn.config(state=tk.DISABLED)
+                self.tk_icon_btn.config(state=tk.DISABLED)
         else:
             self.selected_app = None
             self.tk_launch_btn.config(state=tk.DISABLED)
             self.tk_uninstall_btn.config(state=tk.DISABLED)
+            self.tk_icon_btn.config(state=tk.DISABLED)
     
     def _on_tk_launch(self) -> None:
         """Handle Tkinter launch button."""
@@ -205,6 +216,11 @@ class AppImageManagerGUI:
     def _on_tk_refresh(self) -> None:
         """Handle Tkinter refresh button."""
         self._refresh_tk_list()
+    
+    def _on_tk_find_icon(self) -> None:
+        """Handle Tkinter find icon button."""
+        if self.selected_app:
+            self._find_icon_for_app(self.selected_app)
     
     def _show_tkinter(self) -> None:
         """Show Tkinter window and start main loop."""
@@ -268,6 +284,103 @@ class AppImageManagerGUI:
                 dialogs.show_error(
                     "Uninstall Error",
                     f"Error during uninstallation: {str(e)}"
+                )
+    
+    def _find_icon_for_app(self, app: AppImageInfo) -> None:
+        """Find and apply a better icon for the selected application."""
+        # Ask user for consent to search web
+        response = dialogs.show_question(
+            "Search for Icon",
+            f"Would you like to search the web for a better icon for '{app.name}'?\n\n"
+            f"This will:\n"
+            f"• Search safe, known icon sources\n"
+            f"• Download and apply a better icon if found\n"
+            f"• Only search for common, well-known applications\n\n"
+            f"Click 'Yes' to search online or 'No' to use local system icons only."
+        )
+        
+        if response == DialogResult.YES:
+            # Show progress message
+            self.tk_root.config(cursor="wait")
+            self.tk_root.update()
+            
+            try:
+                # Search for web icon
+                icon_path = self.manager.search_web_icon(app.name, app.version)
+                
+                if icon_path:
+                    # Update the app's icon path
+                    app.icon_path = icon_path
+                    
+                    # Update in registry
+                    registry = self.manager._load_registry()
+                    abs_path = str(Path(app.appimage_path).absolute())
+                    if abs_path in registry:
+                        registry[abs_path]['icon_path'] = icon_path
+                        self.manager._save_registry(registry)
+                    
+                    # Recreate desktop file with new icon
+                    if app.desktop_file_path:
+                        self.desktop.remove_desktop_file(app.desktop_file_path)
+                    
+                    app.desktop_file_path = self.desktop.create_desktop_file(app)
+                    self.desktop.create_desktop_shortcut(app)
+                    
+                    dialogs.show_info(
+                        "Icon Found",
+                        f"Successfully found and applied a new icon for '{app.name}'!"
+                    )
+                    
+                    # Refresh the list
+                    self._refresh_tk_list()
+                else:
+                    dialogs.show_info(
+                        "No Icon Found",
+                        f"Could not find a suitable icon for '{app.name}' online.\n"
+                        f"The application will continue to use the default icon."
+                    )
+                    
+            except Exception as e:
+                dialogs.show_error(
+                    "Icon Search Error",
+                    f"Error searching for icon: {str(e)}"
+                )
+            finally:
+                self.tk_root.config(cursor="")
+        
+        else:
+            # Try to find better system icon
+            system_icon = self.manager._find_system_icon(app.name)
+            if system_icon and system_icon != app.icon_path:
+                # Update the app's icon path
+                app.icon_path = system_icon
+                
+                # Update in registry
+                registry = self.manager._load_registry()
+                abs_path = str(Path(app.appimage_path).absolute())
+                if abs_path in registry:
+                    registry[abs_path]['icon_path'] = system_icon
+                    self.manager._save_registry(registry)
+                
+                # Recreate desktop file with new icon
+                if app.desktop_file_path:
+                    self.desktop.remove_desktop_file(app.desktop_file_path)
+                
+                app.desktop_file_path = self.desktop.create_desktop_file(app)
+                self.desktop.create_desktop_shortcut(app)
+                
+                dialogs.show_info(
+                    "Icon Updated",
+                    f"Found and applied a system icon for '{app.name}'!"
+                )
+                
+                # Refresh the list
+                self._refresh_tk_list()
+            else:
+                dialogs.show_info(
+                    "No Better Icon",
+                    f"Could not find a better system icon for '{app.name}'.\n"
+                    f"The application will continue to use the current icon."
                 )
 
 

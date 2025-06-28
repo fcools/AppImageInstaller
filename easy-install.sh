@@ -87,27 +87,27 @@ install_dependencies() {
             sudo apt update >/dev/null 2>&1
             sudo apt install -y python3-pip python3-gi python3-gi-cairo \
                 gir1.2-gtk-3.0 python3-pil python3-magic libmagic1 \
-                python3-packaging python3-tk >/dev/null 2>&1
+                python3-packaging python3-tk python3-requests >/dev/null 2>&1
             ;;
         fedora)
             echo -e "${YELLOW}Installing packages for Fedora...${NC}"
             sudo dnf install -y python3-pip python3-gobject gtk3-devel \
-                python3-pillow python3-magic >/dev/null 2>&1
+                python3-pillow python3-magic python3-requests >/dev/null 2>&1
             ;;
         centos|rhel|rocky|almalinux)
             echo -e "${YELLOW}Installing packages for RHEL/CentOS...${NC}"
             sudo yum install -y python3-pip python3-gobject gtk3-devel \
-                python3-pillow python3-magic >/dev/null 2>&1
+                python3-pillow python3-magic python3-requests >/dev/null 2>&1
             ;;
         arch|manjaro|endeavouros)
             echo -e "${YELLOW}Installing packages for Arch Linux...${NC}"
             sudo pacman -S --needed --noconfirm python-pip python-gobject gtk3 \
-                python-pillow python-magic >/dev/null 2>&1
+                python-pillow python-magic python-requests >/dev/null 2>&1
             ;;
         opensuse-leap|opensuse-tumbleweed|sled|sles)
             echo -e "${YELLOW}Installing packages for openSUSE...${NC}"
             sudo zypper install -y python3-pip python3-gobject \
-                gtk3-devel python3-Pillow python3-magic >/dev/null 2>&1
+                gtk3-devel python3-Pillow python3-magic python3-requests >/dev/null 2>&1
             ;;
         *)
             echo -e "${YELLOW}⚠️  Unknown distribution: $DISTRO${NC}"
@@ -116,6 +116,7 @@ install_dependencies() {
             echo "  • python3-gobject (GTK bindings)"
             echo "  • python3-pillow (image processing)" 
             echo "  • python3-magic (file type detection)"
+            echo "  • python3-requests (web requests for icon search)"
             echo
             read -p "Continue anyway? (y/N): " -n 1 -r < /dev/tty
             echo

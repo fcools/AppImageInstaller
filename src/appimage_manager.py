@@ -157,14 +157,15 @@ class AppImageManager:
         """
         if not self.is_appimage(appimage_path):
             return None
-        
+
         try:
             path = Path(appimage_path)
             
-            # Create basic info from filename as fallback
-            # Reason: Complex extraction can fail, so we provide basic info
+            # Start with basic info from filename as foundation
+            basic_name = path.stem.replace('_', ' ').replace('-', ' ').title()
+            
             info = AppImageInfo(
-                name=path.stem.replace('_', ' ').replace('-', ' ').title(),
+                name=basic_name,
                 version='Unknown',
                 description=f'AppImage application: {path.stem}',
                 icon_path='',
@@ -176,11 +177,497 @@ class AppImageManager:
                 installed_date=''
             )
             
+            # Try to extract real metadata from AppImage
+            extracted_info = self._extract_appimage_metadata(appimage_path)
+            if extracted_info:
+                # Update with extracted information
+                if extracted_info.get('name'):
+                    info.name = extracted_info['name']
+                if extracted_info.get('version'):
+                    info.version = extracted_info['version']
+                if extracted_info.get('description'):
+                    info.description = extracted_info['description']
+                if extracted_info.get('categories'):
+                    info.categories = extracted_info['categories']
+                if extracted_info.get('mime_types'):
+                    info.mime_types = extracted_info['mime_types']
+            
+            # Handle icon with multiple fallback strategies
+            extracted_icon = extracted_info.get('icon_path') if extracted_info else None
+            info.icon_path = self._get_icon_for_appimage(appimage_path, info.name, info.categories, extracted_icon)
+            
             return info
             
         except Exception as e:
             print(f"Error extracting AppImage info: {e}")
             return None
+    
+    def _extract_appimage_metadata(self, appimage_path: str) -> Optional[Dict]:
+        """
+        Extract metadata from AppImage using appimage-extract.
+        
+        Args:
+            appimage_path (str): Path to the AppImage file.
+            
+        Returns:
+            Optional[Dict]: Extracted metadata or None if extraction fails.
+        """
+        try:
+            import tempfile
+            import subprocess
+            
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                
+                # Copy AppImage to temp directory and make executable
+                appimage_copy = temp_path / "app.AppImage"
+                shutil.copy2(appimage_path, appimage_copy)
+                os.chmod(appimage_copy, 0o755)
+                
+                # Extract AppImage contents
+                result = subprocess.run([
+                    str(appimage_copy), '--appimage-extract'
+                ], cwd=temp_path, capture_output=True, timeout=30)
+                
+                if result.returncode != 0:
+                    return None
+                
+                # Look for desktop files in extracted contents
+                squashfs_root = temp_path / "squashfs-root"
+                if not squashfs_root.exists():
+                    return None
+                
+                # Find main desktop file
+                desktop_files = list(squashfs_root.glob("*.desktop"))
+                if not desktop_files:
+                    # Look in usr/share/applications
+                    desktop_files = list(squashfs_root.glob("usr/share/applications/*.desktop"))
+                
+                if desktop_files:
+                    return self._parse_desktop_file(desktop_files[0], squashfs_root)
+                
+                return None
+                
+        except Exception as e:
+            print(f"Error extracting AppImage metadata: {e}")
+            return None
+    
+    def _parse_desktop_file(self, desktop_file: Path, squashfs_root: Path) -> Dict:
+        """
+        Parse desktop file to extract application metadata.
+        
+        Args:
+            desktop_file (Path): Path to desktop file.
+            squashfs_root (Path): Root of extracted AppImage.
+            
+        Returns:
+            Dict: Parsed metadata.
+        """
+        metadata = {}
+        
+        try:
+            with open(desktop_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Parse desktop file
+            for line in content.split('\n'):
+                line = line.strip()
+                if '=' in line and not line.startswith('#'):
+                    key, value = line.split('=', 1)
+                    
+                    if key == 'Name':
+                        metadata['name'] = value
+                    elif key == 'Version':
+                        metadata['version'] = value
+                    elif key == 'Comment':
+                        metadata['description'] = value
+                    elif key == 'Categories':
+                        metadata['categories'] = [cat.strip() for cat in value.split(';') if cat.strip()]
+                    elif key == 'MimeType':
+                        metadata['mime_types'] = [mime.strip() for mime in value.split(';') if mime.strip()]
+                    elif key == 'Icon':
+                        # Handle icon extraction
+                        icon_path = self._extract_icon_from_appimage(value, squashfs_root)
+                        if icon_path:
+                            metadata['icon_path'] = icon_path
+            
+            return metadata
+            
+        except Exception as e:
+            print(f"Error parsing desktop file: {e}")
+            return {}
+    
+    def _extract_icon_from_appimage(self, icon_name: str, squashfs_root: Path) -> Optional[str]:
+        """
+        Extract icon from AppImage contents.
+        
+        Args:
+            icon_name (str): Icon name from desktop file.
+            squashfs_root (Path): Root of extracted AppImage.
+            
+        Returns:
+            Optional[str]: Path to extracted icon or None.
+        """
+        try:
+            # Common icon locations in AppImages
+            icon_locations = [
+                squashfs_root / icon_name,
+                squashfs_root / f"{icon_name}.png",
+                squashfs_root / f"{icon_name}.svg",
+                squashfs_root / f"{icon_name}.ico",
+                squashfs_root / f"{icon_name}.xpm",
+                squashfs_root / "usr" / "share" / "icons" / "hicolor" / "**" / f"{icon_name}.*",
+                squashfs_root / "usr" / "share" / "pixmaps" / f"{icon_name}.*",
+                squashfs_root / "**" / f"{icon_name}.*"
+            ]
+            
+            # Find the best icon
+            best_icon = None
+            best_size = 0
+            
+            for location_pattern in icon_locations:
+                if '*' in str(location_pattern):
+                    # Use glob for patterns
+                    matches = list(squashfs_root.glob(str(location_pattern).replace(str(squashfs_root) + '/', '')))
+                else:
+                    # Direct file check
+                    matches = [location_pattern] if location_pattern.exists() else []
+                
+                for icon_file in matches:
+                    if icon_file.is_file():
+                        # Prefer larger icons and certain formats
+                        size_score = self._get_icon_size_score(icon_file)
+                        if size_score > best_size:
+                            best_icon = icon_file
+                            best_size = size_score
+            
+            if best_icon:
+                # Copy icon to our icons directory
+                return self._copy_icon_to_storage(best_icon)
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error extracting icon: {e}")
+            return None
+    
+    def _get_icon_size_score(self, icon_file: Path) -> int:
+        """
+        Get a score for icon based on size and format preference.
+        
+        Args:
+            icon_file (Path): Path to icon file.
+            
+        Returns:
+            int: Score (higher is better).
+        """
+        try:
+            # Format preferences (SVG > PNG > others)
+            format_scores = {'.svg': 1000, '.png': 500, '.ico': 200, '.xpm': 100}
+            base_score = format_scores.get(icon_file.suffix.lower(), 50)
+            
+            # Try to get actual image size for raster formats
+            if icon_file.suffix.lower() in ['.png', '.ico', '.jpg', '.jpeg']:
+                try:
+                    from PIL import Image
+                    with Image.open(icon_file) as img:
+                        width, height = img.size
+                        # Prefer icons around 48-128px
+                        size = min(width, height)
+                        if 48 <= size <= 128:
+                            return base_score + size
+                        elif size > 128:
+                            return base_score + 128 - (size - 128) // 10
+                        else:
+                            return base_score + size
+                except:
+                    pass
+            
+            # Guess size from filename (e.g., "48x48", "128x128")
+            filename = icon_file.name.lower()
+            import re
+            size_match = re.search(r'(\d+)x\d+', filename)
+            if size_match:
+                size = int(size_match.group(1))
+                return base_score + min(size, 128)
+            
+            return base_score
+            
+        except:
+            return 1
+    
+    def _copy_icon_to_storage(self, icon_file: Path) -> str:
+        """
+        Copy icon to our icon storage directory.
+        
+        Args:
+            icon_file (Path): Source icon file.
+            
+        Returns:
+            str: Path to copied icon.
+        """
+        try:
+            # Create icon filename based on app
+            import hashlib
+            import time
+            
+            # Create unique filename
+            timestamp = str(int(time.time()))
+            source_hash = hashlib.md5(str(icon_file).encode()).hexdigest()[:8]
+            extension = icon_file.suffix or '.png'
+            
+            icon_filename = f"extracted_{timestamp}_{source_hash}{extension}"
+            
+            # Determine best size directory (prefer 48x48 for desktop files)
+            icon_dir = self.icons_dir / "48x48" / "apps"
+            icon_dir.mkdir(parents=True, exist_ok=True)
+            
+            target_path = icon_dir / icon_filename
+            shutil.copy2(icon_file, target_path)
+            
+            return str(target_path)
+            
+        except Exception as e:
+            print(f"Error copying icon to storage: {e}")
+            return ""
+    
+    def _get_icon_for_appimage(self, appimage_path: str, app_name: str, categories: List[str], extracted_icon: Optional[str] = None) -> str:
+        """
+        Get icon for AppImage using multiple fallback strategies.
+        
+        Args:
+            appimage_path (str): Path to AppImage file.
+            app_name (str): Application name.
+            categories (List[str]): Application categories.
+            extracted_icon (Optional[str]): Icon extracted from AppImage, if any.
+            
+        Returns:
+            str: Path to icon or icon name.
+        """
+        # 1. Use extracted icon if available
+        if extracted_icon:
+            return extracted_icon
+        
+        # 2. Try system icon theme search for known applications
+        system_icon = self._find_system_icon(app_name)
+        if system_icon:
+            return system_icon
+        
+        # 3. Use category-based fallback icons
+        category_icon = self._get_category_icon(app_name, categories)
+        if category_icon:
+            return category_icon
+        
+        # 4. Ultimate fallback
+        return 'application-x-executable'
+    
+    def search_web_icon(self, app_name: str, version: str = "") -> Optional[str]:
+        """
+        Search the web for application icon (requires user consent).
+        
+        Args:
+            app_name (str): Application name to search for.
+            version (str): Application version (optional).
+            
+        Returns:
+            Optional[str]: Path to downloaded icon or None.
+        """
+        try:
+            import requests
+            import tempfile
+            from urllib.parse import quote
+            
+            # Create search query
+            search_query = f"{app_name} application icon"
+            if version and version != "Unknown":
+                search_query += f" {version}"
+            
+            # Use DuckDuckGo Images API (doesn't require API key)
+            search_url = f"https://duckduckgo.com/?q={quote(search_query)}&t=h_&iax=images&ia=images"
+            
+            # For now, we'll use a simple approach with common icon hosting sites
+            # This is a basic implementation - in production you'd want more sophisticated search
+            icon_urls = self._find_icon_urls(app_name)
+            
+            for url in icon_urls:
+                try:
+                    response = requests.get(url, timeout=10, headers={
+                        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
+                    })
+                    
+                    if response.status_code == 200 and 'image' in response.headers.get('content-type', ''):
+                        # Save the image
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+                            temp_file.write(response.content)
+                            temp_path = temp_file.name
+                        
+                        # Copy to our storage
+                        return self._copy_icon_to_storage(Path(temp_path))
+                        
+                except:
+                    continue
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error searching web for icon: {e}")
+            return None
+    
+    def _find_icon_urls(self, app_name: str) -> List[str]:
+        """
+        Generate potential icon URLs for common applications.
+        
+        Args:
+            app_name (str): Application name.
+            
+        Returns:
+            List[str]: List of potential icon URLs.
+        """
+        name_lower = app_name.lower().replace(' ', '').replace('-', '').replace('_', '')
+        
+        # Common icon sources and patterns
+        icon_urls = []
+        
+        # Known application icons (safe, common apps)
+        known_apps = {
+            'firefox': 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Firefox_logo%2C_2019.svg/1024px-Firefox_logo%2C_2019.svg.png',
+            'chrome': 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Google_Chrome_icon_%28September_2014%29.svg/1024px-Google_Chrome_icon_%28September_2014%29.svg.png',
+            'vlc': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/VLC_Icon.svg/1024px-VLC_Icon.svg.png',
+            'gimp': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/The_GIMP_icon_-_gnome.svg/1024px-The_GIMP_icon_-_gnome.svg.png',
+            'inkscape': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0d/Inkscape_Logo.svg/1024px-Inkscape_Logo.svg.png',
+            'blender': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Blender_logo_no_text.svg/1024px-Blender_logo_no_text.svg.png',
+            'krita': 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/73/Calligrakrita-base.svg/1024px-Calligrakrita-base.svg.png',
+            'discord': 'https://assets-global.website-files.com/6257adef93867e50d84d30e2/636e0a6918e57475a843dcad_icon_clyde_black_RGB.png',
+            'telegram': 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Telegram_logo.svg/1024px-Telegram_logo.svg.png',
+            'vscode': 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Visual_Studio_Code_1.35_icon.svg/1024px-Visual_Studio_Code_1.35_icon.svg.png',
+        }
+        
+        if name_lower in known_apps:
+            icon_urls.append(known_apps[name_lower])
+        
+        # Alternative patterns to try
+        search_variations = [
+            name_lower,
+            app_name.lower().replace(' ', '-'),
+            app_name.lower().replace(' ', '_'),
+        ]
+        
+        for variation in search_variations:
+            if variation in known_apps:
+                icon_urls.append(known_apps[variation])
+        
+        return icon_urls
+    
+    def _find_system_icon(self, app_name: str) -> Optional[str]:
+        """
+        Search system icon themes for application icon.
+        
+        Args:
+            app_name (str): Application name to search for.
+            
+        Returns:
+            Optional[str]: Icon name if found in system.
+        """
+        try:
+            # Common system icon locations
+            icon_theme_dirs = [
+                Path("/usr/share/icons/hicolor"),
+                Path("/usr/share/pixmaps"),
+                Path.home() / ".local/share/icons/hicolor",
+                Path.home() / ".icons"
+            ]
+            
+            # Generate possible icon names
+            search_names = [
+                app_name.lower(),
+                app_name.lower().replace(' ', '-'),
+                app_name.lower().replace(' ', '_'),
+                app_name.lower().replace(' ', ''),
+            ]
+            
+            for theme_dir in icon_theme_dirs:
+                if not theme_dir.exists():
+                    continue
+                    
+                for icon_name in search_names:
+                    # Look for icons in various formats
+                    for ext in ['.svg', '.png', '.xpm', '.ico']:
+                        for size_dir in ['scalable', '48x48', '64x64', '32x32', '128x128']:
+                            icon_paths = [
+                                theme_dir / size_dir / "apps" / f"{icon_name}{ext}",
+                                theme_dir / f"{icon_name}{ext}",  # For pixmaps
+                            ]
+                            
+                            for icon_path in icon_paths:
+                                if icon_path.exists():
+                                    return str(icon_path)
+            
+            return None
+            
+        except:
+            return None
+    
+    def _get_category_icon(self, app_name: str, categories: List[str]) -> str:
+        """
+        Get appropriate icon based on application category and name heuristics.
+        
+        Args:
+            app_name (str): Application name.
+            categories (List[str]): Application categories.
+            
+        Returns:
+            str: Icon name for the category.
+        """
+        name_lower = app_name.lower()
+        
+        # Filename/name-based heuristics
+        if any(word in name_lower for word in ['browser', 'firefox', 'chrome', 'web']):
+            return 'web-browser'
+        elif any(word in name_lower for word in ['editor', 'code', 'vim', 'emacs', 'atom', 'vscode']):
+            return 'text-editor'
+        elif any(word in name_lower for word in ['player', 'vlc', 'media', 'video', 'music']):
+            return 'multimedia-player'
+        elif any(word in name_lower for word in ['image', 'photo', 'gimp', 'inkscape', 'draw']):
+            return 'image-viewer'
+        elif any(word in name_lower for word in ['game', 'play']):
+            return 'applications-games'
+        elif any(word in name_lower for word in ['office', 'writer', 'calc', 'document']):
+            return 'application-office'
+        elif any(word in name_lower for word in ['terminal', 'console', 'shell']):
+            return 'utilities-terminal'
+        elif any(word in name_lower for word in ['mail', 'email', 'thunderbird']):
+            return 'mail-client'
+        elif any(word in name_lower for word in ['chat', 'message', 'discord', 'telegram']):
+            return 'chat'
+        elif any(word in name_lower for word in ['develop', 'ide', 'studio']):
+            return 'applications-development'
+        
+        # Category-based mapping
+        if categories:
+            category_map = {
+                'AudioVideo': 'multimedia-player',
+                'Audio': 'multimedia-player', 
+                'Video': 'multimedia-player',
+                'Development': 'applications-development',
+                'Education': 'applications-education',
+                'Game': 'applications-games',
+                'Graphics': 'image-viewer',
+                'Network': 'applications-internet',
+                'Office': 'application-office',
+                'Science': 'applications-science',
+                'Settings': 'preferences-system',
+                'System': 'applications-system',
+                'Utility': 'applications-utilities',
+                'WebBrowser': 'web-browser',
+                'TextEditor': 'text-editor'
+            }
+            
+            for category in categories:
+                if category in category_map:
+                    return category_map[category]
+        
+        # Default fallback
+        return 'application-x-executable'
     
     def is_registered(self, appimage_path: str) -> bool:
         """
