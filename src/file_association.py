@@ -63,6 +63,12 @@ class FileAssociation:
             if not self._update_desktop_database():
                 return False
             
+            # Set as default application for AppImage MIME type
+            self._set_default_application()
+            
+            # Force system-wide desktop database update
+            self._update_system_desktop_database()
+            
             return True
             
         except Exception as e:
@@ -162,9 +168,9 @@ Comment=Install and manage AppImage applications
 Exec={script_path} %f
 Icon=application-x-executable
 StartupNotify=false
-NoDisplay=true
-MimeType=application/x-appimage;
-Categories=System;
+NoDisplay=false
+MimeType=application/x-appimage;application/x-executable;application/x-sharedlib;
+Categories=System;Utility;
 """
             
             app_file = self.applications_dir / "appimage-installer.desktop"
@@ -224,6 +230,41 @@ Categories=System;
         except Exception:
             # Silent fail - not critical
             return True
+    
+    def _set_default_application(self) -> bool:
+        """
+        Explicitly set our application as the default for AppImage MIME type.
+        
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+        try:
+            result = subprocess.run([
+                'xdg-mime', 'default', 'appimage-installer.desktop', 'application/x-appimage'
+            ], capture_output=True, timeout=30)
+            
+            return result.returncode == 0
+            
+        except Exception:
+            return False
+    
+    def _update_system_desktop_database(self) -> bool:
+        """
+        Update system-wide desktop database.
+        
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+        try:
+            # Try system-wide update (requires sudo, may fail)
+            subprocess.run([
+                'sudo', 'update-desktop-database'
+            ], capture_output=True, timeout=30)
+            
+            return True
+            
+        except Exception:
+            return True  # Don't fail if we can't do system update
     
     def _update_desktop_database(self) -> bool:
         """
